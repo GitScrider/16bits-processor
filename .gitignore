@@ -1,0 +1,47 @@
+# ---- Quartus / Intel FPGA build artifacts ----
+db/
+incremental_db/
+output_files/
+simulation/
+timing/
+greybox_tmp/
+*.qws
+*.rpt
+*.summary
+*.smsg
+*.pin
+*.pof
+*.sof
+*.jdi
+*.done
+*.qarlog
+c5_pin_model_dump.txt
+PLLJ_PLLSPE_INFO.txt
+
+# ---- ModelSim / simulation work libs ----
+work/
+transcript
+vsim.wlf
+*.vstf
+modelsim.ini
+
+# ---- Icarus Verilog / GTKWave ----
+*.vvp
+*.vcd
+*.fst
+*.gtkw
+
+# ---- Yosys / SymbiYosys formal ----
+*_formal/
+*.smt2
+*.il
+
+# ---- RTL schematics: keep the .svg, ignore the intermediate netlist json ----
+docs/schematics/*.json
+
+# ---- OS / editor cruft ----
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/

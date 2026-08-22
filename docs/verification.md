@@ -13,7 +13,7 @@ flowchart LR
       B --> C["Waveforms<br/>(GTKWave / ModelSim)"]
     end
     subgraph L2["2 · Formal"]
-      D["SVA properties"] --> E["SymbiYosys + Yosys<br/>(SAT/SMT solver)"]
+      D["SVA properties"] --> E["Yosys built-in SAT<br/>(exhaustive / k-induction)"]
       E --> F["Proof <b>or</b><br/>counterexample"]
     end
     subgraph L3["3 · On hardware"]
@@ -137,7 +137,7 @@ A green result means *"every property I stated holds."* It says nothing about be
 
 Below are the properties worth proving for this design, drawn directly from the brief. They map cleanly onto the module-by-module plan.
 
-> **Note on signal names.** The RTL has not been written yet, so the identifiers below (`ulaop`, `ula_result`, `phase`, `pc`, `clock_wb`, …) are **illustrative placeholders** chosen to echo the schematic labels (ULAOP, ULA RESULT, ClockWB, …). Align them to the actual port names when the RTL exists — that alignment itself is part of bring-up.
+> **These properties are now proven.** When this section was first written the RTL did not exist yet, so the identifiers below (`ulaop`, `ula_result`, `phase`, `pc`, `clock_wb`, …) were illustrative placeholders echoing the schematic labels. The RTL now exists, and the properties have been written against the real port names and **discharged by machine** — see [§3.6](#36-results-every-module-is-machine-checked) for the outcomes and the exact commands. The property files live in [`formal/`](../formal) and run with one script, [`tools/run_formal.ps1`](../tools/run_formal.ps1).
 
 | # | Property | Module | Layer(s) |
 |---|----------|--------|----------|
@@ -146,6 +146,11 @@ Below are the properties worth proving for this design, drawn directly from the 
 | 3 | 5-phase sequencer state is always one-hot | Sequencer | formal |
 | 4 | PC changes only by +1 or to a valid target | PC / next-PC MUX | formal |
 | 5 | Register-file read-after-write returns the written value | Register file | formal |
+| 6 | Each opcode drives the correct control-line bundle | Control unit | formal |
+| 7 | Data-memory read returns the last value written to that address | Data memory | formal |
+| 8 | Instruction ROM returns the intended program word at every address | Instruction memory | formal |
+
+All eight are proven today, covering all seven leaf modules — see [§3.6](#36-results-every-module-is-machine-checked).
 
 ### 3.1 ALU result matches a reference model
 
@@ -240,6 +245,66 @@ Because `k` is `anyconst`, the solver proves this for *every* register at once, 
 ```systemverilog
 assume property (@(posedge clk) opcode <= 4'hD);
 ```
+
+### 3.6 Results: every module is machine-checked
+
+The properties above were written against the real RTL and discharged with **Yosys's built-in SAT engine** (through the `yowasp-yosys` Python wheel — a self-contained, pip-installable build, so the whole proof flow runs with no external SMT solver and nothing to compile). One script runs them all:
+
+```bash
+python -m pip install yowasp-yosys        # one-time
+powershell -ExecutionPolicy Bypass -File tools/run_formal.ps1
+```
+
+```text
+alu_props        -> PROVED (exhaustive, all inputs)
+control_props    -> PROVED (exhaustive, all inputs)
+imem_props       -> PROVED (exhaustive, all inputs)
+pc_props         -> PROVED (unbounded, k-induction)
+regfile_props    -> PROVED (unbounded, k-induction)
+dmem_props       -> PROVED (unbounded, k-induction)
+sequencer_props  -> PROVED (unbounded, k-induction)
+```
+
+Two engine strategies are used, matched to the module:
+
+- **Combinational modules — ALU, control unit and instruction ROM — are proved *exhaustively*.** With no state to unroll, a single SAT query proves the property for *every* input combination at once. For the ALU that is every operand pair and every `ULAOP`; for the control unit it is every one of the 16 opcodes; for the instruction ROM it is every one of the 16 addresses (after `memory_map; opt -full` bakes the fixed contents into flat logic). The command is:
+
+  ```bash
+  yowasp-yosys -p "read_verilog -sv -formal rtl/alu.sv formal/alu_props.sv; \
+    prep -top alu_props -flatten; memory_map; opt -full; \
+    chformal -lower; sat -prove-asserts -verify"
+  ```
+
+- **Sequential modules — PC, register file, data memory, sequencer — are proved *unbounded* by k-induction** (`sat -tempinduct`). Induction avoids BMC's "only to depth *k*" blind spot: it proves that if the invariant holds for *k* consecutive cycles it must hold on the next, so the guarantee covers *all* time and *all* input sequences. The command adds `async2sync` (to lower the clocked asserts) and `-set-init-zero` (flops start at their power-on zero):
+
+  ```bash
+  yowasp-yosys -p "read_verilog -sv -formal rtl/pc.sv formal/pc_props.sv; \
+    prep -top pc_props -flatten; memory_map; opt -full; async2sync; \
+    chformal -lower; sat -tempinduct -set-init-zero -prove-asserts -seq 20 -verify"
+  ```
+
+What each proof actually establishes:
+
+| Property file | Module | Guarantee proven | How |
+|---------------|--------|------------------|-----|
+| `alu_props.sv` | ALU | every `ULAOP` result equals its reference expression; `slt` is exactly 0/1 | exhaustive |
+| `control_props.sv` | Control unit | each of the 16 opcodes drives the correct control-line bundle | exhaustive |
+| `imem_props.sv` | Instruction memory | every one of the 16 addresses returns exactly its intended program word | exhaustive |
+| `sequencer_props.sv` | Sequencer | phase is *always* one-hot (or the transient power-on zero) — never multi-hot or stuck | k-induction |
+| `pc_props.sv` | Program counter | next-PC obeys the priority `reset > load > +1 > hold` | k-induction |
+| `regfile_props.sv` | Register file | reset clears all registers; a written value reads back next cycle | k-induction |
+| `dmem_props.sv` | Data memory | the registered read returns the last value written to that address (1-cycle latency) | k-induction |
+
+A few practical notes captured while making these go through, in case they help the next module:
+
+- **`memory_map` is required for any module with an inferred array** (register file, data memory, instruction ROM). Without it the SAT solver hits the raw `$mem` cell and reports "No SAT model"; `memory_map` lowers the array to plain flip-flops (and, for the read-only ROM, `opt -full` then folds those into constants).
+- **`$past`-based "write-then-read" properties are cleanly inductive.** Expressing the contract purely in terms of what happened *N* cycles ago (rather than a shadow register plus `anyconst`) avoided the induction-strengthening failures the shadow approach ran into here.
+- **The data memory is proved at a small address width** (`dmem #(.AW(4))`). The read/write logic is identical at any size, so this proves the behaviour without flattening the full 64K-word array, which would be intractable for the solver.
+- **`$initstate` is not honored by the `sat` engine**; the base case is instead pinned with `-set-init-zero`, which is exactly the hardware's power-on state.
+
+The integrated CPU itself (`rtl/cpu.sv`) is covered by the self-checking [`sim/cpu_tb.sv`](../sim/cpu_tb.sv), which runs the full `loop.mem` program end to end — exercising branch-taken, fall-through, and jump paths — and all seven of its leaf building blocks are proven above.
+
+> **SymbiYosys note.** The primer in §2 describes the SymbiYosys (`.sby` + `smtbmc`) flow because it is the canonical open-source formal front-end and the best thing to learn first. The proofs here take a lighter path — driving Yosys's built-in `sat` engine directly through `yowasp-yosys` — because it needs no external SMT solver and no native build, which suits a portable, reproducible setup. The concepts (BMC vs. k-induction, `assert`/`assume`/`cover`) are identical; only the runner differs.
 
 ---
 

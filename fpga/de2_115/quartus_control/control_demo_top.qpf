@@ -1,0 +1,4 @@
+QUARTUS_VERSION = "13.1"
+
+# Revisions
+PROJECT_REVISION = "control_demo_top"

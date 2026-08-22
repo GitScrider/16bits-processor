@@ -54,19 +54,17 @@ bit15 ........................................ bit0
 [  OP (4)  ][  RD (4)  ][  RX (4)  ][  RY / I (4) ]
 ```
 
-- **OP** — 4-bit opcode (16 possible codes; 14 defined, 2 reserved).
+- **OP** — 4-bit opcode (16 possible codes; 13 defined, 3 reserved).
 - **RD** — destination register selector.
 - **RX** — first source register selector.
 - **RY / I** — second source register (R-type) *or* a 4-bit immediate / branch-or-jump target
   (I-type and control-flow). Because this field is only 4 bits wide, **every immediate and every
   jump/branch target is in the range `0`..`15`.**
 
-> **[TO-VERIFY] — field endianness.** Whether `OP` is the most-significant nibble (`bit15..12`) or
-> the least-significant nibble has not yet been confirmed. Following the project brief, this doc
-> presents `OP` as the **most-significant** nibble (matching the left-to-right order of the ISA
-> table), but the exact byte order **is to be confirmed during RTL bring-up** by co-simulating the
-> Verilog testbench against the Logisim run. Any concrete hex value shown below inherits that same
-> caveat.
+> **Field endianness — CONFIRMED.** `OP` is the **most-significant** nibble (`bit15..12`), matching
+> the left-to-right order of the ISA table. This was recovered from the Logisim *unidade de controle*
+> netlist and confirmed by RTL co-simulation of the Verilog testbench against the Logisim run. Every
+> concrete hex value shown below is packed with `OP` in the top nibble.
 
 Full opcode assignments and control-signal semantics live in the [ISA reference](isa.md).
 
@@ -87,29 +85,30 @@ written `r0`..`r15`; immediates and targets are written as plain integers in `0`
 
 | Hex `OP` | Mnemonic | Assembly form | Operation |
 |:--------:|----------|---------------|-----------|
-| `0` | `ctrl` | `ctrl` | no-op / reserved control (all control signals 0) |
-| `1` | `addi` | `addi rD, rX, I` | `rD = rX + ext(I)` |
-| `2` | `subi` | `subi rD, rX, I` | `rD = rX - ext(I)` |
-| `3` | `muli` | `muli rD, rX, I` | `rD = rX * ext(I)` |
-| `4` | `divi` | `divi rD, rX, I` | `rD = rX / ext(I)` |
-| `5` | `add`  | `add rD, rX, rY` | `rD = rX + rY` |
-| `6` | `sub`  | `sub rD, rX, rY` | `rD = rX - rY` |
-| `7` | `mul`  | `mul rD, rX, rY` | `rD = rX * rY` |
-| `8` | `div`  | `div rD, rX, rY` | `rD = rX / rY` |
-| `9` | `slt`  | `slt rD, rX, rY` | `rD = (rX < rY) ? 1 : 0` |
-| `A` | `beqz` | `beqz rX, target` | `if (rX == 0) PC = target` |
-| `B` | `sw`   | `sw rAdd, rData` | `DataMem[reg[rAdd]] = reg[rData]` |
-| `C` | `lw`   | `lw rD, rAdd` | `rD = DataMem[reg[rAdd]]` |
-| `D` | `j`    | `j target` | `PC = target` |
-| `E` | *(reserved)* | — | free opcode for future use |
-| `F` | *(reserved)* | — | free opcode for future use |
+| `0` | `addi` | `addi rD, rX, I` | `rD = rX + ext(I)` |
+| `1` | `subi` | `subi rD, rX, I` | `rD = rX - ext(I)` |
+| `2` | `muli` | `muli rD, rX, I` | `rD = rX * ext(I)` |
+| `3` | `divi` | `divi rD, rX, I` | `rD = rX / ext(I)` |
+| `4` | `add`  | `add rD, rX, rY` | `rD = rX + rY` |
+| `5` | `sub`  | `sub rD, rX, rY` | `rD = rX - rY` |
+| `6` | `mul`  | `mul rD, rX, rY` | `rD = rX * rY` |
+| `7` | `div`  | `div rD, rX, rY` | `rD = rX / rY` |
+| `8` | `slt`  | `slt rD, rX, rY` | `rD = (rX < rY) ? 1 : 0` |
+| `9` | `beqz` | `beqz rX, target` | `if (rX == 0) PC = target` |
+| `A` | *(reserved)* | — | unused — decodes to no operation (all control signals 0) |
+| `B` | *(reserved)* | — | unused — decodes to no operation (all control signals 0) |
+| `C` | `sw`   | `sw rAdd, rData` | `DataMem[reg[rAdd]] = reg[rData]` |
+| `D` | `lw`   | `lw rD, rAdd` | `rD = DataMem[reg[rAdd]]` |
+| `E` | `j`    | `j target` | `PC = target` |
+| `F` | *(reserved)* | — | unused — decodes to no operation (all control signals 0) |
 
-`ext(I)` denotes the immediate after the schematic's extend block.
+`ext(I)` denotes the immediate after the schematic's extend block. There is **no dedicated `ctrl`/no-op
+opcode**: opcode `0` is `addi`, so the all-zero word `0x0000` decodes as `addi r0, r0, 0` — it writes
+`r0 = r0 + 0` and therefore acts as a natural no-op.
 
-> **[TO-VERIFY] — immediate extension.** Whether the 4-bit immediate is **sign-extended** or
-> **zero-extended** is not yet settled (a sign/zero "extend" block exists on the schematic). Treat
-> `ext(I)` as configurable; the choice **will be confirmed during RTL bring-up.** Since the field
-> is 4 bits, the raw immediate is always in `0`..`15` either way.
+> **Immediate extension — CONFIRMED (zero-extend).** The 4-bit immediate is **zero-extended** into the
+> 16-bit datapath, so `ext(I)` is just the raw value in `0`..`15` placed in the low nibble with the
+> upper 12 bits cleared. This was confirmed during RTL bring-up.
 
 ### Instruction classes
 
@@ -119,7 +118,9 @@ written `r0`..`r15`; immediates and targets are written as plain integers in `0`
 - **Jump** (`j`): unconditionally sets `PC` to `target`.
 - **Memory** (`lw`, `sw`): the register named as the address holds the **data-memory address**; its
   *contents* index `DataMem`, not the register number itself.
-- **Control** (`ctrl`): a no-op; leaves all control signals at 0.
+- **Reserved** (opcodes `A`, `B`, `F`): unused by the decoder — they assert no control signals and so
+  perform no operation. There is no separate `ctrl` opcode; the all-zero word `0x0000` (`addi r0, r0, 0`)
+  serves as the natural no-op.
 
 ### How operands map onto the 16-bit word
 
@@ -130,10 +131,10 @@ Not every instruction uses all four fields. Unused nibbles are shown as `-` and 
 |----------|:----:|:----:|:----:|:--------:|
 | `addi`/`subi`/`muli`/`divi` | opcode | `rD` | `rX` | `I` (immediate) |
 | `add`/`sub`/`mul`/`div`/`slt` | opcode | `rD` | `rX` | `rY` |
-| `beqz` | `A` | `-` | `rX` (tested) | `target` |
-| `sw` | `B` | `-` | `rAdd` (address reg) | `rData` (data reg) |
-| `lw` | `C` | `rD` | `rAdd` (address reg) | `-` |
-| `j` | `D` | `-` | `-` | `target` |
+| `beqz` | `9` | `-` | `rX` (tested) | `target` |
+| `sw` | `C` | `-` | `rAdd` (address reg) | `rData` (data reg) |
+| `lw` | `D` | `rD` | `rAdd` (address reg) | `-` |
+| `j` | `E` | `-` | `-` | `target` |
 
 **Branch and jump targets are absolute instruction addresses** in `0`..`15` — the value the program
 counter is loaded with, not an offset. That range lines up exactly with the 16-word instruction
@@ -141,17 +142,13 @@ memory described below.
 
 ### Hand-assembling one instruction
 
-Take `add r1, r2, r3`. Its four nibbles are:
+Take `add r1, r2, r3`. `add` is opcode `4`, so its four nibbles are:
 
 | Field | `OP` | `RD` | `RX` | `RY` |
 |-------|:----:|:----:|:----:|:----:|
-| Value | `5` | `1` | `2` | `3` |
+| Value | `4` | `1` | `2` | `3` |
 
-Reading `OP` as the most-significant nibble, the packed word is `0x5123`.
-
-> This concrete value assumes `OP` is the most-significant nibble. If the endianness turns out to be
-> the other way around (see the caveat above), the nibble *values* are unchanged but their order in
-> the stored word flips. **The byte order is to be confirmed during RTL bring-up.**
+With `OP` as the most-significant nibble (confirmed), the packed word is `0x4123`.
 
 ---
 
@@ -243,12 +240,31 @@ That is 7 words, loaded into addresses `0`..`6` (hexadecimal):
 It exercises the comparison instruction, the conditional branch, and the unconditional jump together,
 which is exactly what makes it a good first program to watch step through the 5-phase clock.
 
-> **The exact, instruction-by-instruction decode of `loop.mem` is intentionally not published here.**
-> Decoding each word into `OP / RD / RX / RY-I` depends on the field endianness, which is still
-> **[TO-VERIFY]** (see the encoding caveat above). A confident byte-by-byte decode **is pending
-> endianness confirmation during RTL bring-up** — it will be produced by co-simulating the Verilog
-> testbench against the Logisim run and added once verified. Until then, rely on the high-level
-> description (nested loops via `slt`/`beqz`/`j`) rather than a per-word breakdown.
+**Instruction-by-instruction decode** (confirmed by RTL co-simulation against the Logisim run, with
+`OP` as the most-significant nibble):
+
+| Address | Word | Assembly | Effect |
+|:-------:|:----:|----------|--------|
+| 0 | `0x0000` | `addi r0, r0, 0` | `r0 = r0 + 0` — no-op |
+| 1 | `0x0112` | `addi r1, r1, 2` | `r1 = 2` — loop bound (runs once) |
+| 2 | `0x0221` | `addi r2, r2, 1` | `r2 = r2 + 1` — inner counter **← branch target** |
+| 3 | `0x8312` | `slt r3, r1, r2` | `r3 = (r1 < r2) ? 1 : 0` **← jump target** |
+| 4 | `0x9032` | `beqz r3, 2` | if `r3 == 0`, `PC = 2` (keep counting) |
+| 5 | `0x0240` | `addi r2, r4, 0` | `r2 = r4 + 0 = 0` — reset the counter |
+| 6 | `0xe003` | `j 3` | `PC = 3` — restart forever |
+
+Reading the fields back confirms the map: e.g. `0x8312` is `OP=8` (`slt`), `RD=3`, `RX=1`, `RY=2`;
+`0x9032` is `OP=9` (`beqz`), `RX=3` tested, `target=2` in the low nibble; and `0xe003` is `OP=E`
+(`j`) with `target=3`. Note that `0x0000` at address 0 is not a special `ctrl` opcode — it is simply
+`addi r0, r0, 0`, which happens to do nothing.
+
+**How it runs — a `for` nested inside a `while`.** Addresses `2`..`4` are the inner `for` loop: each
+pass bumps the counter `r2` (`addi r2, r2, 1`), compares it against the bound `r1` with `slt`, and
+`beqz` branches back to address `2` as long as `r1 < r2` is still false (i.e. while `r2` has not yet
+passed `r1`). Once `r2` overtakes `r1`, `slt` yields `1`, `beqz` falls through, and address `5`
+resets the counter (`r2 = 0`). Address `6` then `j`umps back to address `3`, forming the outer
+`while (true)` loop that reruns the count forever. In short: a bounded up-count (the `for`) wrapped
+in an unconditional restart (the `while`), exercising `slt`, `beqz`, and `j` together.
 
 ---
 

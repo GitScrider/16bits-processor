@@ -88,21 +88,21 @@ module control_tb;
 
         // ---- Build the golden truth table -----------------------------------
         //                    jump branch memw  memula aluadr ulaop    regw  alusrc
-        expected[4'h0] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // ctrl (nop)
-        expected[4'h1] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b1, 1'b1); // addi
-        expected[4'h2] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b001,  1'b1, 1'b1); // subi
-        expected[4'h3] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b010,  1'b1, 1'b1); // muli
-        expected[4'h4] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b011,  1'b1, 1'b1); // divi
-        expected[4'h5] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b1, 1'b0); // add
-        expected[4'h6] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b001,  1'b1, 1'b0); // sub
-        expected[4'h7] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b010,  1'b1, 1'b0); // mul
-        expected[4'h8] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b011,  1'b1, 1'b0); // div
-        expected[4'h9] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b100,  1'b1, 1'b0); // slt
-        expected[4'hA] = row(1'b0, 1'b1,  1'b0, 1'b0,  1'b1,  3'b101,  1'b0, 1'b0); // beqz
-        expected[4'hB] = row(1'b0, 1'b0,  1'b1, 1'b0,  1'b1,  3'b000,  1'b0, 1'b0); // sw
-        expected[4'hC] = row(1'b0, 1'b0,  1'b0, 1'b1,  1'b1,  3'b000,  1'b1, 1'b0); // lw
-        expected[4'hD] = row(1'b1, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // j
-        expected[4'hE] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // reserved
+        expected[4'h0] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b1, 1'b1); // addi
+        expected[4'h1] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b001,  1'b1, 1'b1); // subi
+        expected[4'h2] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b010,  1'b1, 1'b1); // muli
+        expected[4'h3] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b011,  1'b1, 1'b1); // divi
+        expected[4'h4] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b1, 1'b0); // add
+        expected[4'h5] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b001,  1'b1, 1'b0); // sub
+        expected[4'h6] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b010,  1'b1, 1'b0); // mul
+        expected[4'h7] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b011,  1'b1, 1'b0); // div
+        expected[4'h8] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b100,  1'b1, 1'b0); // slt
+        expected[4'h9] = row(1'b0, 1'b1,  1'b0, 1'b0,  1'b1,  3'b101,  1'b0, 1'b0); // beqz
+        expected[4'hA] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // reserved
+        expected[4'hB] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // reserved
+        expected[4'hC] = row(1'b0, 1'b0,  1'b1, 1'b0,  1'b1,  3'b000,  1'b0, 1'b0); // sw
+        expected[4'hD] = row(1'b0, 1'b0,  1'b0, 1'b1,  1'b1,  3'b000,  1'b1, 1'b0); // lw
+        expected[4'hE] = row(1'b1, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // j
         expected[4'hF] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // reserved
 
         // ---- Exhaustive sweep of all 16 opcodes -----------------------------

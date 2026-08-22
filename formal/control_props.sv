@@ -18,20 +18,29 @@ module control_props (input logic [3:0] op);
                  .regwrite(regwrite), .alusrc(alusrc));
 
     always_comb begin
-        // regwrite: write a result for the arithmetic ops (0x1..0x9) and lw (0xC).
-        assert (regwrite == ((op >= 4'h1 && op <= 4'h9) || op == 4'hC));
-        // alusrc (immediate operand): only the immediate ALU ops addi..divi (0x1..0x4).
-        assert (alusrc  == (op >= 4'h1 && op <= 4'h4));
-        // jump: only j (0xD).
-        assert (jump    == (op == 4'hD));
-        // branch: only beqz (0xA).
-        assert (branch  == (op == 4'hA));
-        // memwrite: only sw (0xB).
-        assert (memwrite == (op == 4'hB));
-        // memula (mem-to-reg): only lw (0xC).
-        assert (memula  == (op == 4'hC));
-        // reserved opcodes 0xE / 0xF assert no control line (all quiet).
-        if (op == 4'hE || op == 4'hF)
+        // regwrite: write a result for the arithmetic/slt ops (0x0..0x8) and lw (0xD).
+        assert (regwrite == ((op <= 4'h8) || op == 4'hD));
+        // alusrc (immediate operand): only the immediate ALU ops addi..divi (0x0..0x3).
+        assert (alusrc  == (op <= 4'h3));
+        // jump: only j (0xE).
+        assert (jump    == (op == 4'hE));
+        // branch: only beqz (0x9).
+        assert (branch  == (op == 4'h9));
+        // memwrite: only sw (0xC).
+        assert (memwrite == (op == 4'hC));
+        // memula (mem-to-reg): only lw (0xD).
+        assert (memula  == (op == 4'hD));
+        // aluadr (data-memory-address / branch-compare path): beqz, sw, lw.
+        assert (aluadr  == (op == 4'h9 || op == 4'hC || op == 4'hD));
+        // ulaop selects the ALU function per opcode.
+        assert (ulaop == ((op == 4'h1 || op == 4'h5) ? 3'b001 :  // sub  (subi, sub)
+                          (op == 4'h2 || op == 4'h6) ? 3'b010 :  // mul  (muli, mul)
+                          (op == 4'h3 || op == 4'h7) ? 3'b011 :  // div  (divi, div)
+                          (op == 4'h8)               ? 3'b100 :  // slt
+                          (op == 4'h9)               ? 3'b101 :  // subtract-for-ZERO (beqz)
+                                                       3'b000)); // add / mem / jump / reserved
+        // reserved opcodes 0xA / 0xB / 0xF assert no control line (all quiet).
+        if (op == 4'hA || op == 4'hB || op == 4'hF)
             assert (!jump && !branch && !memwrite && !memula && !aluadr && !regwrite && !alusrc && ulaop == 3'b000);
     end
 endmodule

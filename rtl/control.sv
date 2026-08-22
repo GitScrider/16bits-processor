@@ -50,22 +50,23 @@ module control (
 );
 
     // ---- Opcode map ---------------------------------------------------------
-    // Keep in sync with docs/isa.md, the Logisim design, and the assembler.
-    localparam logic [3:0] OP_CTRL = 4'h0; // nop / no-op ("ctrl")
-    localparam logic [3:0] OP_ADDI = 4'h1; // rd = rx + imm
-    localparam logic [3:0] OP_SUBI = 4'h2; // rd = rx - imm
-    localparam logic [3:0] OP_MULI = 4'h3; // rd = rx * imm
-    localparam logic [3:0] OP_DIVI = 4'h4; // rd = rx / imm
-    localparam logic [3:0] OP_ADD  = 4'h5; // rd = rx + ry
-    localparam logic [3:0] OP_SUB  = 4'h6; // rd = rx - ry
-    localparam logic [3:0] OP_MUL  = 4'h7; // rd = rx * ry
-    localparam logic [3:0] OP_DIV  = 4'h8; // rd = rx / ry
-    localparam logic [3:0] OP_SLT  = 4'h9; // rd = (rx < ry) ? 1 : 0
-    localparam logic [3:0] OP_BEQZ = 4'hA; // branch if rx == 0
-    localparam logic [3:0] OP_SW   = 4'hB; // mem[addr] = ry  (store word)
-    localparam logic [3:0] OP_LW   = 4'hC; // rd = mem[addr]  (load word)
-    localparam logic [3:0] OP_J    = 4'hD; // PC = target     (unconditional jump)
-    // 0xE and 0xF are RESERVED -> handled by the default arm (all outputs 0).
+    // Matches the Logisim UNIDADE DE CONTROLE decoder (recovered from the .circ
+    // netlist). Note: 0x0 is addi, not a separate "ctrl" -- 0x0000 decodes to
+    // "addi r0,r0,0", which is the natural no-op.
+    localparam logic [3:0] OP_ADDI = 4'h0; // rd = rx + imm
+    localparam logic [3:0] OP_SUBI = 4'h1; // rd = rx - imm
+    localparam logic [3:0] OP_MULI = 4'h2; // rd = rx * imm
+    localparam logic [3:0] OP_DIVI = 4'h3; // rd = rx / imm
+    localparam logic [3:0] OP_ADD  = 4'h4; // rd = rx + ry
+    localparam logic [3:0] OP_SUB  = 4'h5; // rd = rx - ry
+    localparam logic [3:0] OP_MUL  = 4'h6; // rd = rx * ry
+    localparam logic [3:0] OP_DIV  = 4'h7; // rd = rx / ry
+    localparam logic [3:0] OP_SLT  = 4'h8; // rd = (rx < ry) ? 1 : 0
+    localparam logic [3:0] OP_BEQZ = 4'h9; // branch if rx == 0
+    localparam logic [3:0] OP_SW   = 4'hC; // mem[addr] = ry  (store word)
+    localparam logic [3:0] OP_LW   = 4'hD; // rd = mem[addr]  (load word)
+    localparam logic [3:0] OP_J    = 4'hE; // PC = target     (unconditional jump)
+    // 0xA, 0xB and 0xF are RESERVED -> handled by the default arm (all outputs 0).
 
     // ALU operation codes (mirror rtl/alu.sv ULAOP encoding).
     localparam logic [2:0] ULA_ADD  = 3'b000;
@@ -89,11 +90,6 @@ module control (
         // ---- Per-opcode overrides: one arm == one row of the truth table -----
         unique case (op)
             // Columns:            jump branch memwrite memula aluadr ulaop     regwrite alusrc
-
-            // 0x0 ctrl : do nothing -- all defaults (0) are correct.
-            OP_CTRL : begin
-                // (defaults already zero)
-            end
 
             // ---- Immediate ALU ops: alusrc=1 (2nd operand = immediate), write RD
             OP_ADDI : begin ulaop = ULA_ADD; regwrite = 1'b1; alusrc = 1'b1; end
@@ -124,7 +120,7 @@ module control (
             // j: unconditional jump -- only the jump line is asserted.
             OP_J    : begin jump = 1'b1; end
 
-            // 0xE, 0xF and anything else: reserved -> keep all-zero defaults.
+            // 0xA, 0xB, 0xF and anything else: reserved -> keep all-zero defaults.
             default : begin
                 // (defaults already zero)
             end

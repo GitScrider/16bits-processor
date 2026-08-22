@@ -18,7 +18,7 @@ The core numbers are deliberately small and uniform, which makes the design easy
 | Instruction width | 16 bits (single fixed format) |
 | General-purpose registers | 16 registers × 16 bits (`r0`..`r15`) |
 | Execution model | Multicycle, 5 fixed phases per instruction |
-| Opcodes | 4-bit OP field → 16 possible; 14 defined, 2 reserved |
+| Opcodes | 4-bit OP field → 16 possible; 13 defined, 3 reserved (0xA, 0xB, 0xF) |
 | Instruction memory (L1-I) | 16 words × 16 bits |
 | Data memory (L1-D) | 65536 words × 16 bits |
 
@@ -133,7 +133,7 @@ The control outputs observed on the schematic are: `Jump`, `ALUscr`, `RW` (regis
 
 > **[TO-VERIFY]** The exact role of `ALUadr` is still to be confirmed during RTL bring-up. Best current understanding: it steers the ALU output onto the data-memory address path / branch-compare path rather than the arithmetic write-back path. This should be confirmed by tracing the `.circ` during bring-up.
 
-The full opcode → control-signal mapping (14 defined opcodes, 2 reserved) is reproduced in [ISA](isa.md); the summary is that immediate arithmetic (`addi`/`subi`/`muli`/`divi`) sets `ALUscr = 1` and `WriteBack = 1`, register arithmetic (`add`/`sub`/`mul`/`div`/`slt`) sets `WriteBack = 1` with `ALUscr = 0`, `lw` uses `MemULA = 1`, `sw` uses `MemWrite = 1`, `beqz` uses `Branch = 1`, and `j` uses `Jump = 1`.
+The full opcode → control-signal mapping (13 defined opcodes, 3 reserved) is reproduced in [ISA](isa.md); the summary is that immediate arithmetic (`addi`/`subi`/`muli`/`divi`, opcodes 0–3) sets `ALUscr = 1` and `WriteBack = 1`, register arithmetic (`add`/`sub`/`mul`/`div`/`slt`, opcodes 4–8) sets `WriteBack = 1` with `ALUscr = 0`, `lw` uses `MemULA = 1`, `sw` uses `MemWrite = 1`, `beqz` (opcode 9) uses `Branch = 1`, and `j` (opcode 0xE) uses `Jump = 1`.
 
 ![Control unit](images/03-unidade-controle.jpg)
 

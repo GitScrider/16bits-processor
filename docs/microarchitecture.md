@@ -79,9 +79,9 @@ Three things happen together:
 3. **Register read** — the register file reads the registers selected by RX and RY, strobed by **`ClockBR`**.
 
 ### Phase 3 — Execute
-The ALU takes its two operands — operand 2 is the register RY when `ALUscr = 0`, or the extended immediate I when `ALUscr = 1` — and computes the operation chosen by `ULAOP`. The selected result passes through a **clocked ALU output register** in this phase, and the **`ZERO`** flag (used by `beqz`) is produced here.
+The ALU takes its two operands — operand 2 is the register RY when `ALUscr = 0`, or the zero-extended immediate I when `ALUscr = 1` — and computes the operation chosen by `ULAOP`. The selected result passes through a **clocked ALU output register** in this phase, and the **`ZERO`** flag (used by `beqz`) is produced here.
 
-> **Immediate extension is [TO-VERIFY].** Whether the 4-bit immediate I is *sign*- or *zero*-extended before entering the ALU is still to be confirmed during RTL bring-up. Treat it as configurable until then.
+> **Immediate extension — confirmed.** The 4-bit immediate I (range 0..15) is **zero-extended** into the 16-bit datapath before entering the ALU. Confirmed by RTL co-simulation of the integrated `rtl/cpu.sv` against the Logisim run.
 
 ### Phase 4 — Memory
 Only the memory class does real work here:
@@ -93,7 +93,7 @@ Every other instruction passes through this phase idle.
 ### Phase 5 — Write-back
 Two independent updates:
 - **Register write-back** — if `WriteBack`/`RW = 1`, the write-back datum is written into register RD, strobed by **`ClockWB`**. The datum is the ALU result when `MemULA = 0`, or the data-memory read when `MemULA = 1` (`lw`).
-- **PC update** — the program counter advances (see [Next-PC selection](#5-next-pc-selection) below).
+- **PC update** — the program counter commits its next value in this phase — `PC+1`, or a jump/branch target. All three next-PC outcomes commit here in phase 5 (see [Next-PC selection](#5-next-pc-selection) below).
 
 ---
 
@@ -108,7 +108,7 @@ The multicycle schedule derives several distinct clock strobes from the phase ou
 | **ALU output register clock** | phase 3 | Capture the ALU result and the `ZERO` flag in the ALU output register. |
 | **`ClockWB`** | phase 5 | Write the write-back datum into register RD. |
 
-The tildes ("approximately") reflect that these strobes are *derived from* the phase lines; the phase-to-strobe alignment above is the current, observed understanding. The one timing detail that is explicitly still open is **when the PC actually commits for jumps and branches** — see the note in the next section.
+The tildes ("approximately") reflect that these strobes are *derived from* the phase lines; the phase-to-strobe alignment above is the current, observed understanding. **Jumps and branches commit their new PC in phase 5 (write-back)** — the same phase as the normal `PC+1` update — now confirmed by RTL co-simulation of the integrated `rtl/cpu.sv` in ModelSim (see the next section).
 
 ---
 
@@ -139,8 +139,8 @@ graph TD
 
 The `ZERO` flag comes from the ALU: for `beqz`, `ULAOP = 101` selects a "subtract for ZERO" that compares RX against zero, and `Branch = 1` arms the conditional PC load. For an unconditional `j`, `Jump = 1` loads the target regardless of any flag.
 
-> **[TO-VERIFY] — the exact phase in which jump and branch commit the new PC.**
-> The designer recalls that `j` (jump) effectively resolves its PC update **around phase 3–4** — i.e. after the register-bank step it diverts the program counter, without needing the memory or write-back arithmetic path. The precise phase at which **jump and branch commit the new PC is still to be confirmed during RTL bring-up** (by co-simulating the Verilog testbench against the Logisim run). Until then, treat the phase-5 "PC update" description above as the nominal model and the phase-3–4 recollection for `j`/`beqz` as pending confirmation.
+> **Confirmed — jump and branch commit the new PC in phase 5 (write-back).**
+> Both `j` (unconditional jump) and `beqz` (branch-if-zero) commit their new PC in **phase 5**, the same write-back phase in which the normal `PC ← PC+1` update happens — there is no separate early-divert path. This was confirmed by co-simulating the integrated `rtl/cpu.sv` (running `loop.mem`) against the Logisim run in ModelSim.
 
 ---
 
@@ -153,15 +153,15 @@ Classes follow the [control table](architecture.md): **R-type** = `add, sub, mul
 | Class | Phase 1 — PC | Phase 2 — Fetch/Decode | Phase 3 — Execute | Phase 4 — Memory | Phase 5 — Write-back |
 |-------|--------------|------------------------|-------------------|------------------|----------------------|
 | **R-type** (`add/sub/mul/div/slt`) | Present PC | Fetch; decode; read RX and RY (`ClockBR`) | ALU computes RX ⊕ RY per `ULAOP`; latch result + `ZERO` | *(pass-through)* | Write ALU result → RD (`ClockWB`); `PC ← PC+1` |
-| **I-type** (`addi/subi/muli/divi`) | Present PC | Fetch; decode; read RX; extend immediate I (`ALUscr = 1`) | ALU computes RX ⊕ sext/zext(I) per `ULAOP`; latch result | *(pass-through)* | Write ALU result → RD (`ClockWB`); `PC ← PC+1` |
+| **I-type** (`addi/subi/muli/divi`) | Present PC | Fetch; decode; read RX; zero-extend immediate I (`ALUscr = 1`) | ALU computes RX ⊕ zext(I) per `ULAOP`; latch result | *(pass-through)* | Write ALU result → RD (`ClockWB`); `PC ← PC+1` |
 | **`beqz`** | Present PC | Fetch; decode; read RX (`ClockBR`) | ALU "subtract for ZERO" (`ULAOP = 101`) compares RX to 0; produce `ZERO`; `Branch = 1` | *(pass-through)* | No register write; `PC ← target` if `ZERO = 1`, else `PC ← PC+1` † |
 | **`sw`** | Present PC | Fetch; decode; read source registers (`ClockBR`) | ALU active; `ALUadr = 1` steers the address path ‡ | **Write** data memory (`MemWrite = 1`) | No register write; `PC ← PC+1` |
 | **`lw`** | Present PC | Fetch; decode; read address register (`ClockBR`) | ALU active; `ALUadr = 1` steers the address path ‡ | **Read** data memory | Write memory data → RD (`ClockWB`, `MemULA = 1`); `PC ← PC+1` |
-| **`j`** | Present PC | Fetch; decode (`Jump = 1`) | *(pass-through)* — designer recalls PC diverts around phase 3–4 † | *(pass-through)* | No register write; `PC ← target` † |
+| **`j`** | Present PC | Fetch; decode (`Jump = 1`) | *(pass-through)* | *(pass-through)* | No register write; `PC ← target` (commits in phase 5) † |
 
-† **[TO-VERIFY]** — the exact phase at which `j` and `beqz` commit the new PC is still to be confirmed during RTL bring-up (see [Next-PC selection](#5-next-pc-selection)).
+† **Confirmed** — `j` and `beqz` commit the new PC in **phase 5 (write-back)**, the same phase as the normal `PC+1` update (see [Next-PC selection](#5-next-pc-selection)). Verified by RTL co-simulation of the integrated `rtl/cpu.sv` in ModelSim.
 
-‡ **[TO-VERIFY]** — the exact role of `ALUadr` is still to be confirmed during RTL bring-up. Best current understanding: it steers the ALU output onto the data-memory address / branch-compare path rather than the arithmetic write-back path. It is asserted for `beqz`, `sw`, and `lw`.
+‡ **Confirmed** — `ALUadr` routes `reg[RX]` onto the data-memory address path (for `lw` and `sw`) and onto the branch-compare path (for `beqz`), rather than the arithmetic write-back path. It is asserted for `beqz`, `sw`, and `lw`. Verified by RTL co-simulation of the integrated `rtl/cpu.sv` in ModelSim.
 
 A few things worth noticing in the table:
 
@@ -178,6 +178,6 @@ A few things worth noticing in the table:
 - Timing comes from a **one-hot ring sequencer** — five D-flip-flops in a loop plus a reset AND-gate — whose single hot bit marches `1 → 2 → 3 → 4 → 5` and back.
 - The phases are **PC → Fetch/Decode → Execute → Memory → Write-back**, with strobes **PC clock**, **`ClockBR`**, **ALU output register clock**, and **`ClockWB`** firing at their respective phases.
 - The next PC is chosen by a MUX among **PC+1**, **jump target** (`Jump`), and **branch target** (`Branch AND ZERO`), using the 4-bit I field as the target.
-- The precise phase at which **jump/branch commit the PC**, the **role of `ALUadr`**, and the **sign-vs-zero immediate extension** all remain **to be confirmed during RTL bring-up**.
+- **Confirmed by RTL co-simulation** (integrated `rtl/cpu.sv` running `loop.mem` in ModelSim): **jump and branch commit the PC in phase 5 (write-back)**; **`ALUadr`** routes `reg[RX]` onto the data-memory address path (`lw`/`sw`) and the branch-compare path (`beqz`); and the **4-bit immediate is zero-extended** into the 16-bit datapath.
 
 **See also:** [Architecture](architecture.md) · [ISA](isa.md)

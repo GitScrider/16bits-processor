@@ -263,7 +263,10 @@ pc_props         -> PROVED (unbounded, k-induction)
 regfile_props    -> PROVED (unbounded, k-induction)
 dmem_props       -> PROVED (unbounded, k-induction)
 sequencer_props  -> PROVED (unbounded, k-induction)
+vga_sync_props   -> PROVED (unbounded, k-induction)
 ```
+
+(The last one covers the VGA video-output peripheral — its timing generator; the seven above it are the CPU's leaf modules.)
 
 Two engine strategies are used, matched to the module:
 
@@ -294,6 +297,7 @@ What each proof actually establishes:
 | `pc_props.sv` | Program counter | next-PC obeys the priority `reset > load > +1 > hold` | k-induction |
 | `regfile_props.sv` | Register file | reset clears all registers; a written value reads back next cycle | k-induction |
 | `dmem_props.sv` | Data memory | the registered read returns the last value written to that address (1-cycle latency) | k-induction |
+| `vga_sync_props.sv` | VGA timing generator | the raster counters never leave the 800×525 grid; the visible flag is exactly the 640×480 window | k-induction |
 
 A few practical notes captured while making these go through, in case they help the next module:
 

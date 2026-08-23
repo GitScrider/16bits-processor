@@ -31,7 +31,8 @@ $SEQ = @(
     @{ rtl = 'rtl/pc.sv';        props = 'formal/pc_props.sv';        top = 'pc_props' },
     @{ rtl = 'rtl/regfile.sv';   props = 'formal/regfile_props.sv';   top = 'regfile_props' },
     @{ rtl = 'rtl/dmem.sv';      props = 'formal/dmem_props.sv';      top = 'dmem_props' },
-    @{ rtl = 'rtl/sequencer.sv'; props = 'formal/sequencer_props.sv'; top = 'sequencer_props' }
+    @{ rtl = 'rtl/sequencer.sv'; props = 'formal/sequencer_props.sv'; top = 'sequencer_props' },
+    @{ rtl = 'rtl/vga_sync.sv';  props = 'formal/vga_sync_props.sv';  top = 'vga_sync_props' }
 )
 foreach ($c in $SEQ) {
     $log = Join-Path $env:TEMP ("formal_" + $c.top + ".log")

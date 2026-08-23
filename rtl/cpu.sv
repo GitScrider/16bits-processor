@@ -35,7 +35,10 @@
 //  on ModelSim ASE 10.1d (bundled with Quartus II 13.1).
 // =============================================================================
 
-module cpu (
+module cpu #(
+    parameter     PROGRAM = "",     // imem program; "" = loop.mem, "vga" = moving square
+    parameter int DMEM_AW = 16      // data-memory address width (2**DMEM_AW words)
+) (
     input  logic        clk,
     input  logic        rst,        // synchronous reset: PC=0, regs=0, phase=P1
     output logic [3:0]  pc_out,     // current instruction address
@@ -44,7 +47,11 @@ module cpu (
     // --- debug taps (for the board demo; leave unconnected in simulation) ----
     output logic [3:0]  wb_rd,      // destination register of the current instruction
     output logic        wb_we,      // write-back strobe (high in P5 when a register is written)
-    output logic [15:0] wb_val      // value written back this instruction
+    output logic [15:0] wb_val,     // value written back this instruction
+    // --- memory-mapped store taps (a sw makes these live; drives the VGA reg) --
+    output logic        st_we,      // store strobe: sw commits in P4
+    output logic [15:0] st_addr,    // store address = reg[RX]
+    output logic [15:0] st_data     // store data    = reg[RY]
 );
     // ---- 5-phase ring sequencer --------------------------------------------
     sequencer u_seq (.clk(clk), .rst(rst), .phase(phase));
@@ -64,7 +71,7 @@ module cpu (
     );
 
     // ---- Instruction memory (holds loop.mem) -------------------------------
-    imem #(.AW(4), .DW(16)) u_imem (.addr(pc_out), .instr(instr));
+    imem #(.AW(4), .DW(16), .PROGRAM(PROGRAM)) u_imem (.addr(pc_out), .instr(instr));
 
     // ---- Decode: the control unit turns the opcode into control lines -------
     logic [3:0] op, rd, rx, ryimm;
@@ -124,9 +131,9 @@ module cpu (
     // The address is reg[RX]; sw stores reg[RY]. (loop.mem uses no lw/sw, so the
     // synthesizer prunes this block, but the datapath is complete for any program.)
     logic [15:0] mem_rdata;
-    dmem #(.AW(16), .DW(16)) u_dmem (
+    dmem #(.AW(DMEM_AW), .DW(16)) u_dmem (
         .clk(clk), .we(memwrite & phase[3]),
-        .addr(rx_data), .wdata(ry_data),
+        .addr(rx_data[DMEM_AW-1:0]), .wdata(ry_data),
         .rdata(mem_rdata)
     );
 
@@ -139,6 +146,11 @@ module cpu (
     assign wb_rd  = rd;
     assign wb_we  = rf_we;
     assign wb_val = wb_data;
+
+    // --- memory-mapped store taps: mirror exactly what dmem sees on a sw ----
+    assign st_we   = memwrite & phase[3];
+    assign st_addr = rx_data;
+    assign st_data = ry_data;
 
     // aluadr steers reg[RX] onto the address path; here the data-memory address
     // is already reg[RX], so it needs no extra logic -- tie it off cleanly.

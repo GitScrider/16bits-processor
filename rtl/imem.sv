@@ -47,8 +47,9 @@
 // =============================================================================
 
 module imem #(
-    parameter int AW = 4,   // address width (PC bits). 2**AW = number of words
-    parameter int DW = 16   // data width: bits per instruction word
+    parameter int AW = 4,        // address width (PC bits). 2**AW = number of words
+    parameter int DW = 16,       // data width: bits per instruction word
+    parameter     PROGRAM = ""   // which built-in program: "" = loop.mem, "vga" = moving square
 ) (
     input  logic [AW-1:0] addr,   // address from the PC
     output logic [DW-1:0] instr   // instruction word stored at that address
@@ -68,21 +69,25 @@ module imem #(
         for (i = 0; i < (1<<AW); i = i + 1)
             mem[i] = {DW{1'b0}};
 
-        // the 7-word demo program from the design brief
-        mem[0] = 16'h0000;
-        mem[1] = 16'h0112;
-        mem[2] = 16'h0221;
-        mem[3] = 16'h8312;
-        mem[4] = 16'h9032;
-        mem[5] = 16'h0240;
-        mem[6] = 16'he003;
-        // mem[7] .. mem[15] stay 16'h0000 from the clear loop above.
-
-        // ---- Alternative: load a program from an external hex file ----------
-        // Instead of the inline words above, a real build would emit a hex file
-        // from the assembler and load it here (one 16-bit word per line, hex):
-        //     $readmemh("program.hex", mem);
-        // Leaving both here would double-load; use one or the other.
+        if (PROGRAM == "vga") begin
+            // VGA moving-square program: r5=1 (video address), then forever
+            // increment r1 and store it to mem[r5] -- the counter the square
+            // follows. (See fpga/de2_115/vga_top.sv and logisim/programs/vga_square.mem.)
+            mem[0] = 16'h0501;   // addi r5, r0, 1   -> r5 = 1 (VIDEO_ADDR)
+            mem[1] = 16'h0111;   // addi r1, r1, 1   -> r1++
+            mem[2] = 16'hC051;   // sw   r5, r1      -> mem[r5] <- r1
+            mem[3] = 16'hE001;   // j    1           -> loop forever
+        end else begin
+            // the 7-word default demo program from the design brief (loop.mem)
+            mem[0] = 16'h0000;
+            mem[1] = 16'h0112;
+            mem[2] = 16'h0221;
+            mem[3] = 16'h8312;
+            mem[4] = 16'h9032;
+            mem[5] = 16'h0240;
+            mem[6] = 16'he003;
+            // mem[7] .. mem[15] stay 16'h0000 from the clear loop above.
+        end
     end
 
     // ---- COMBINATIONAL (async) read: output follows the address immediately --

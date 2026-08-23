@@ -1,0 +1,15 @@
+// VGA moving-square demo program  (hex, one 16-bit word per line for $readmemh)
+// Real opcode map, instruction = [ OP(15:12) | RD(11:8) | RX(7:4) | RY/I(3:0) ].
+//
+//   addr  word    assembly            effect
+//   0     0501    addi r5, r0, 1      r5 = 1        (VIDEO_ADDR)
+//   1     0111    addi r1, r1, 1      r1 = r1 + 1   (the counter)
+//   2     C051    sw   r5, r1         mem[r5] <- r1 (store counter to video reg)
+//   3     E001    j    1              loop back to addr 1, forever
+//
+// The processor just counts up and stores the value to the memory-mapped video
+// address; the VGA stage turns that number into the square's on-screen position.
+0501
+0111
+C051
+E001

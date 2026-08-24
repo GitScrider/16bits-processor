@@ -37,11 +37,12 @@
 
 module cpu #(
     parameter     PROGRAM = "",     // imem program; "" = loop.mem, "vga" = moving square
-    parameter int DMEM_AW = 16      // data-memory address width (2**DMEM_AW words)
+    parameter int DMEM_AW = 16,     // data-memory address width (2**DMEM_AW words)
+    parameter int PCW     = 4       // program-counter width -> 2**PCW instruction words
 ) (
     input  logic        clk,
     input  logic        rst,        // synchronous reset: PC=0, regs=0, phase=P1
-    output logic [3:0]  pc_out,     // current instruction address
+    output logic [PCW-1:0] pc_out,  // current instruction address
     output logic [15:0] instr,      // current instruction word
     output logic [4:0]  phase,      // one-hot machine phase (for observation)
     // --- debug taps (for the board demo; leave unconnected in simulation) ----
@@ -59,19 +60,19 @@ module cpu #(
     // ---- Program counter ----------------------------------------------------
     // Updates only in the write-back phase (P5): load a branch/jump target when
     // taken, otherwise advance by +1. (load beats en inside pc.sv.)
-    logic       take;               // branch-taken or jump
-    logic [3:0] target;
-    logic       pc_en, pc_load;
+    logic           take;           // branch-taken or jump
+    logic [PCW-1:0] target;
+    logic           pc_en, pc_load;
     assign pc_en   = phase[4];       // advance/commit happens in P5
     assign pc_load = phase[4] & take;
-    pc #(.W(4)) u_pc (
+    pc #(.W(PCW)) u_pc (
         .clk(clk), .rst(rst),
         .en(pc_en), .load(pc_load), .target(target),
         .pc_out(pc_out)
     );
 
     // ---- Instruction memory (holds loop.mem) -------------------------------
-    imem #(.AW(4), .DW(16), .PROGRAM(PROGRAM)) u_imem (.addr(pc_out), .instr(instr));
+    imem #(.AW(PCW), .DW(16), .PROGRAM(PROGRAM)) u_imem (.addr(pc_out), .instr(instr));
 
     // ---- Decode: the control unit turns the opcode into control lines -------
     logic [3:0] op, rd, rx, ryimm;
@@ -140,7 +141,19 @@ module cpu #(
     // ---- Write-back datum + next-PC selection ------------------------------
     assign wb_data = memula ? mem_rdata : alu_out_reg;  // lw -> memory read, else ALU
     assign take    = jump | (branch & zero_reg);
-    assign target  = ryimm;                  // 4-bit branch/jump target
+    // jr is encoded as jump AND branch asserted together -- a combination no other
+    // opcode produces -- so that pair selects the register-indirect target.
+    logic jr_sel;
+    assign jr_sel = jump & branch;
+
+    // Next-PC target selection, three sources:
+    //   * jr   (jump & branch): PC = reg[RX]  -- register-indirect (tables, returns)
+    //   * j    (jump only)    : PC = instr's 12-bit immediate -> reaches 2**12 = 4096
+    //   * beqz (branch only)  : PC = the 4-bit I field (RX names the tested register)
+    // At the default PCW=4 the immediate forms reduce to instr[3:0], so the
+    // 16-word core is unchanged.
+    assign target  = jr_sel ? rx_data[PCW-1:0]
+                            : (jump ? instr[PCW-1:0] : ryimm);
 
     // --- debug taps -------------------------------------------------------
     assign wb_rd  = rd;

@@ -65,8 +65,9 @@ module control (
     localparam logic [3:0] OP_BEQZ = 4'h9; // branch if rx == 0
     localparam logic [3:0] OP_SW   = 4'hC; // mem[addr] = ry  (store word)
     localparam logic [3:0] OP_LW   = 4'hD; // rd = mem[addr]  (load word)
-    localparam logic [3:0] OP_J    = 4'hE; // PC = target     (unconditional jump)
-    // 0xA, 0xB and 0xF are RESERVED -> handled by the default arm (all outputs 0).
+    localparam logic [3:0] OP_J    = 4'hE; // PC = target     (unconditional jump, 12-bit imm)
+    localparam logic [3:0] OP_JR   = 4'hF; // PC = reg[RX]    (jump register / indirect jump)
+    // 0xA and 0xB are RESERVED -> handled by the default arm (all outputs 0).
 
     // ALU operation codes (mirror rtl/alu.sv ULAOP encoding).
     localparam logic [2:0] ULA_ADD  = 3'b000;
@@ -117,10 +118,15 @@ module control (
             // back the value coming FROM data memory (memula=1) into RD.
             OP_LW   : begin memula = 1'b1; aluadr = 1'b1; regwrite = 1'b1; end
 
-            // j: unconditional jump -- only the jump line is asserted.
+            // j: unconditional jump to a 12-bit immediate target.
             OP_J    : begin jump = 1'b1; end
 
-            // 0xA, 0xB, 0xF and anything else: reserved -> keep all-zero defaults.
+            // jr: jump to reg[RX]. It asserts BOTH jump and branch -- a combination
+            // no other opcode uses -- and the datapath reads that pair as "take the
+            // target from register RX" (see cpu.sv). No dedicated control bit needed.
+            OP_JR   : begin jump = 1'b1; branch = 1'b1; end
+
+            // 0xA, 0xB and anything else: reserved -> keep all-zero defaults.
             default : begin
                 // (defaults already zero)
             end

@@ -1,15 +1,34 @@
-// VGA moving-square demo program  (hex, one 16-bit word per line for $readmemh)
+// VGA moving-square program  (documentation copy; the RTL loads it inline
+// via imem's PROGRAM="vga" parameter -- Quartus 13.1 can't $readmemh at synth).
 // Real opcode map, instruction = [ OP(15:12) | RD(11:8) | RX(7:4) | RY/I(3:0) ].
 //
-//   addr  word    assembly            effect
-//   0     0501    addi r5, r0, 1      r5 = 1        (VIDEO_ADDR)
-//   1     0111    addi r1, r1, 1      r1 = r1 + 1   (the counter)
-//   2     C051    sw   r5, r1         mem[r5] <- r1 (store counter to video reg)
-//   3     E001    j    1              loop back to addr 1, forever
+// The CPU itself computes a bouncing X coordinate and stores it to the
+// memory-mapped video address (1); the VGA stage draws a square at that X.
 //
-// The processor just counts up and stores the value to the memory-mapped video
-// address; the VGA stage turns that number into the square's on-screen position.
+//   addr  word    assembly          effect
+//   0     0204    addi r2, r0, 4    dx = 4          (step)
+//   1     0501    addi r5, r0, 1    r5 = 1          (video address)
+//   2     0709    addi r7, r0, 9    r7 = 9
+//   3     2778    muli r7, r7, 8    r7 = 72
+//   4     2778    muli r7, r7, 8    r7 = 576        (XMAX = 640 - 64)
+//   5     4112    add  r1, r1, r2   x += dx         <-- loop start
+//   6     C051    sw   r5, r1       mem[1] <- x
+//   7     5917    sub  r9, r1, r7   r9 = x - XMAX
+//   8     909B    beqz r9, 11       hit right wall? -> reverse
+//   9     901B    beqz r1, 11       hit left wall (x==0)? -> reverse
+//   10    E005    j    5            else keep going
+//   11    5202    sub  r2, r0, r2   dx = -dx        (reverse direction)
+//   12    E005    j    5            loop
+0204
 0501
-0111
+0709
+2778
+2778
+4112
 C051
-E001
+5917
+909B
+901B
+E005
+5202
+E005

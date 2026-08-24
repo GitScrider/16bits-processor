@@ -3,11 +3,12 @@
 //                  monitor (the roadmap's video-output stage, made real).
 // -----------------------------------------------------------------------------
 //  The processor runs the built-in moving-square program (imem PROGRAM="vga"):
-//  it counts up and stores the counter to a memory-mapped video address every
-//  loop -- the same words listed in logisim/programs/vga_square.mem. This
-//  wrapper snoops that store into a video register, and the VGA stage turns the
-//  value into the on-screen position of a coloured square. So a program running
-//  on our own CPU literally paints pixels on a monitor.
+//  it COMPUTES a bouncing X coordinate (add the step, test the walls, flip the
+//  direction) and stores that coordinate to a memory-mapped video address every
+//  loop -- the same words listed in logisim/programs/vga_square.mem. This wrapper
+//  snoops that store into a video register, and the VGA stage draws a square at
+//  that X. So a program running on our own CPU literally paints pixels on a
+//  monitor, and the CPU -- not the hardware -- decides where the square goes.
 //
 //  Two clocks from the board's 50 MHz:
 //    * pixel clock  = 50 MHz / 2 = 25 MHz  (drives the 640x480@60 VGA timing)
@@ -72,18 +73,19 @@ module vga_top (
     );
 
     // ---- memory-mapped video register (video address = 1) ------------------
-    logic [15:0] vid_val;
+    // The CPU stores its computed X position here; we snoop it off the store bus.
+    logic [15:0] vid_x;
     always_ff @(posedge cpu_clk) begin
         if (rst)
-            vid_val <= 16'h0000;
+            vid_x <= 16'h0000;
         else if (st_we && (st_addr == 16'h0001))
-            vid_val <= st_data;
+            vid_x <= st_data;
     end
 
-    // ---- the VGA output stage (moving square) ------------------------------
+    // ---- the VGA output stage (draws the square at the CPU's X) -------------
     logic hsync, vsync, disp;
     vga_square u_vga (
-        .clk(CLOCK_50), .rst(rst), .pix_en(pix_en), .vid_val(vid_val),
+        .clk(CLOCK_50), .rst(rst), .pix_en(pix_en), .pos_x(vid_x),
         .hsync(hsync), .vsync(vsync), .display_on(disp),
         .vga_r(VGA_R), .vga_g(VGA_G), .vga_b(VGA_B)
     );
@@ -93,6 +95,6 @@ module vga_top (
     assign VGA_SYNC_N  = 1'b0;      // sync-on-green not used on the ADV7123
 
     // ---- status LEDs -------------------------------------------------------
-    assign LEDR = {2'b00, vid_val};             // video value on LEDR[15:0]
+    assign LEDR = {2'b00, vid_x};               // CPU's X position on LEDR[15:0]
     assign LEDG = {cpu_clk, 3'b000, phase};     // [8]=CPU heartbeat, [4:0]=phase
 endmodule

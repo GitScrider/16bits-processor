@@ -22,10 +22,10 @@ module control_props (input logic [3:0] op);
         assert (regwrite == ((op <= 4'h8) || op == 4'hD));
         // alusrc (immediate operand): only the immediate ALU ops addi..divi (0x0..0x3).
         assert (alusrc  == (op <= 4'h3));
-        // jump: only j (0xE).
-        assert (jump    == (op == 4'hE));
-        // branch: only beqz (0x9).
-        assert (branch  == (op == 4'h9));
+        // jump: j (0xE) and jr (0xF). jr asserts jump AND branch together.
+        assert (jump    == (op == 4'hE || op == 4'hF));
+        // branch: beqz (0x9) and jr (0xF). The jump+branch pair means jr.
+        assert (branch  == (op == 4'h9 || op == 4'hF));
         // memwrite: only sw (0xC).
         assert (memwrite == (op == 4'hC));
         // memula (mem-to-reg): only lw (0xD).
@@ -39,8 +39,8 @@ module control_props (input logic [3:0] op);
                           (op == 4'h8)               ? 3'b100 :  // slt
                           (op == 4'h9)               ? 3'b101 :  // subtract-for-ZERO (beqz)
                                                        3'b000)); // add / mem / jump / reserved
-        // reserved opcodes 0xA / 0xB / 0xF assert no control line (all quiet).
-        if (op == 4'hA || op == 4'hB || op == 4'hF)
+        // reserved opcodes 0xA / 0xB assert no control line (all quiet).
+        if (op == 4'hA || op == 4'hB)
             assert (!jump && !branch && !memwrite && !memula && !aluadr && !regwrite && !alusrc && ulaop == 3'b000);
     end
 endmodule

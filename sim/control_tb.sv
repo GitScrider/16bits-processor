@@ -20,6 +20,8 @@
 //  opcode, each built from named fields in the exact column order of the spec:
 //      {jump, branch, memwrite, memula, aluadr, ulaop[2:0], regwrite, alusrc}
 //  so a human can read a row here and check it against the design brief.
+//  Note: jr (0xF) asserts BOTH jump and branch -- that unique pair is how the
+//  datapath recognises a register-indirect jump.
 // =============================================================================
 
 `timescale 1ns/1ps
@@ -60,11 +62,9 @@ module control_tb;
     assign dut_bus = {jump, branch, memwrite, memula, aluadr, ulaop, regwrite, alusrc};
 
     // ---- Golden reference: the truth table, one 10-bit row per opcode --------
-    // Each entry is built from named 1-bit / 3-bit fields in the same order as
-    // dut_bus, so the concatenation literally reads like a row of the table.
     logic [9:0] expected [0:15];
 
-    // helper macro-like function: assemble a row from its fields
+    // helper: assemble a row from its named fields
     function automatic logic [9:0] row(
         input logic       f_jump,
         input logic       f_branch,
@@ -103,7 +103,7 @@ module control_tb;
         expected[4'hC] = row(1'b0, 1'b0,  1'b1, 1'b0,  1'b1,  3'b000,  1'b0, 1'b0); // sw
         expected[4'hD] = row(1'b0, 1'b0,  1'b0, 1'b1,  1'b1,  3'b000,  1'b1, 1'b0); // lw
         expected[4'hE] = row(1'b1, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // j
-        expected[4'hF] = row(1'b0, 1'b0,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // reserved
+        expected[4'hF] = row(1'b1, 1'b1,  1'b0, 1'b0,  1'b0,  3'b000,  1'b0, 1'b0); // jr (jump+branch)
 
         // ---- Exhaustive sweep of all 16 opcodes -----------------------------
         for (o = 0; o < 16; o = o + 1) begin

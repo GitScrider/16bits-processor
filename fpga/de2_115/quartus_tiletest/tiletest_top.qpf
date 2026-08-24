@@ -1,0 +1,7 @@
+QUARTUS_VERSION = "13.1"
+
+# -------------------------------------------------------------------------- #
+#  DE2-115 VGA video-output demo: the CPU drives a moving square on a monitor.
+# -------------------------------------------------------------------------- #
+
+PROJECT_REVISION = "tiletest_top"
